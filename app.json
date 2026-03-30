@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "event-planner",
+    "name": "EventMaster Pro",
     "slug": "event-planner",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,17 +12,29 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.eventmaster.pro",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.eventplanner.app",
+      "package": "com.eventmaster.pro",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,6 +43,27 @@
       "eas": {
         "projectId": "b808c6d5-60fe-4506-94ad-44e116afd629"
       }
-    }
+    },
+    "plugins": [
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "EventMaster Pro needs your camera to scan VIP QR codes at the gate."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "EventMaster Pro needs your contacts to effortlessly build your event VIP pass list."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow EventMaster Pro to securely triangulate your position to scout the most premium relevant venues in your immediate radius."
+        }
+      ]
+    ]
   }
 }

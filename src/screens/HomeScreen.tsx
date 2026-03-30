@@ -222,7 +222,7 @@
 // //                 onPress={() => onVendorSelect && onVendorSelect(vendor.id)}
 // //                 className="w-64 bg-white rounded-2xl mr-4 overflow-hidden border border-slate-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
 // //               >
-// //                 <Image source={{ uri: vendor.imageUrls[0] }} className="w-full h-32" resizeMode="cover" />
+// //                 <Image source={{ uri: vendor.image_url || 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=500' }} className="w-full h-full absolute" resizeMode="cover" />
 // //                 <View className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded-lg flex-row items-center">
 // //                   <Feather name="star" size={12} color="#facc15" />
 // //                   <Text className="text-xs font-bold text-slate-800 ml-1">{vendor.rating}</Text>
@@ -510,13 +510,31 @@
 
 
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Animated, Easing } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Animated, Easing, Dimensions, FlatList } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { occasions, vendors } from '../data/dummyData';
+import { supabase } from '../lib/supabase';
 
-export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
+const occasions = [
+  { id: 'wedding', name: 'Wedding', icon: 'heart', description: 'Curated venues & decor' },
+  { id: 'corporate', name: 'Corporate', icon: 'briefcase', description: 'Professional workspaces' },
+  { id: 'birthday', name: 'Birthday', icon: 'gift', description: 'Fun & energetic vibes' },
+  { id: 'party', name: 'Party', icon: 'music', description: 'DJs, clubs & catering' },
+];
+
+export default function HomeScreen({ onSelectOccasion, onVendorSelect, navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [userName, setUserName] = useState('Planner');
+  const [totalBudget, setTotalBudget] = useState(25000);
+  const [budgetSpent, setBudgetSpent] = useState(0);
+  const [activeEventId, setActiveEventId] = useState<string | null>(null);
   
+  // Multi-Event Concurrency Architecture
+  const [events, setEvents] = useState<any[]>([]);
+  const [activeEventIndex, setActiveEventIndex] = useState(0);
+  const [topVendors, setTopVendors] = useState<any[]>([]);
+  const [eventMetrics, setEventMetrics] = useState<Record<string, { venueName: string | null; venueAddress: string | null; vendorCount: number; rsvps: number; totalRsvps: number; }>>({});
+  const screenWidth = Dimensions.get('window').width;
+
   // Animation Values
   const scrollY = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -526,17 +544,83 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   // Trigger budget animation on mount
-  useEffect(() => {
-    Animated.timing(progressAnim, {
-      toValue: 0.48, // Representing 48% budget spent ($12k / $25k)
-      duration: 1500,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, []);
+  // Trigger massive multi-event refresh & budget animation
+  const fetchEventStats = async (ev: any) => {
+    setActiveEventId(ev.id);
+    setTotalBudget(ev.total_budget || 0);
+    
+    // Reservations (Vendors & Venues)
+    const { data: reserves } = await supabase.from('reservations').select('vendor_id').eq('event_id', ev.id).neq('status', 'rejected');
+    let spent = 0;
+    let vendorCount = 0;
+    let venueName: string | null = null;
+    let venueAddress: string | null = null;
 
-  // Split vendors for Masonry Layout
-  const topVendors = vendors.filter(v => v.rating >= 4.7).slice(0, 4);
+    if (reserves && reserves.length > 0) {
+      const vIds = reserves.map((r: any) => r.vendor_id);
+      vendorCount = vIds.length;
+      const { data: vendorData } = await supabase.from('vendors_cache').select('name, address, type, price_range').in('id', vIds);
+      vendorData?.forEach(v => {
+        if (v.type === 'venues') {
+          venueName = v.name;
+          venueAddress = v.address;
+        }
+        const match = v.price_range?.match(/[\d,]+/);
+        if (match) spent += parseInt(match[0].replace(/,/g, ''));
+      });
+    }
+
+    // Attendees (RSVPs)
+    const { data: attendees } = await supabase.from('attendees').select('status').eq('event_id', ev.id);
+    let rsvpCount = 0;
+    let totalRsvps = 0;
+    if (attendees) {
+      totalRsvps = attendees.length;
+      rsvpCount = attendees.filter(a => a.status === 'arrived' || a.status === 'checked_in').length;
+    }
+
+    setEventMetrics(prev => ({ ...prev, [ev.id]: { venueName, venueAddress, vendorCount, rsvps: rsvpCount, totalRsvps } }));
+    setBudgetSpent(spent);
+    const safeTotal = ev.total_budget > 0 ? ev.total_budget : 1;
+    Animated.timing(progressAnim, {toValue: Math.min(spent / safeTotal, 1), duration: 1500, easing: Easing.out(Easing.cubic), useNativeDriver: false}).start();
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      if (user.email) setUserName(user.email.split('@')[0].replace(/[^a-zA-Z]/g, ''));
+      
+      const { data: vCache } = await supabase.from('vendors_cache').select('*').limit(6);
+      if (vCache) setTopVendors(vCache);
+      
+      const { data: userEvents } = await supabase.from('events').select('*').eq('organizer_id', user.id).order('date', { ascending: true });
+      if (userEvents && userEvents.length > 0) {
+        setEvents(userEvents);
+        fetchEventStats(userEvents[activeEventIndex] || userEvents[0]);
+      } else {
+        setEvents([]);
+        Animated.timing(progressAnim, { toValue: 0, duration: 200, useNativeDriver: false }).start();
+      }
+    };
+    init();
+  }, [activeEventIndex]); // Index dependency to dynamically rebuild the dash on shift
+
+  // Bind Supabase Real-time Listeners for instant Budget updating
+  useEffect(() => {
+    if (!activeEventId) return;
+    
+    const channel = supabase.channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations', filter: `event_id=eq.${activeEventId}` }, (payload) => {
+         // Auto-calculate budget traces seamlessly across all logged nodes
+         if (events[activeEventIndex]) fetchEventStats(events[activeEventIndex]);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [activeEventId, activeEventIndex, events]);
+
+  // Split genuine database vendors for Masonry Layout
   const leftColumnVendors = topVendors.filter((_, index) => index % 2 === 0);
   const rightColumnVendors = topVendors.filter((_, index) => index % 2 !== 0);
 
@@ -563,9 +647,9 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
         style={{ opacity: headerOpacity, transform: [{ translateY: headerTranslateY }] }}
         className="absolute top-0 w-full z-50 bg-white/95 border-b border-slate-100 px-6 py-4 pt-12 flex-row justify-between items-center"
       >
-        <Text className="text-lg font-black text-slate-900">Alex's Planner</Text>
-        <TouchableOpacity className="w-8 h-8 rounded-full overflow-hidden">
-          <Image source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop' }} className="w-full h-full" />
+        <Text className="text-lg font-black text-slate-900">{userName}'s Planner</Text>
+        <TouchableOpacity onPress={() => supabase.auth.signOut()} className="w-8 h-8 rounded-full overflow-hidden border border-red-200 justify-center items-center bg-red-50">
+          <Feather name="log-out" size={14} color="#ef4444" />
         </TouchableOpacity>
       </Animated.View>
 
@@ -580,57 +664,128 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
         <View className="px-6 flex-row justify-between items-center mb-6 pt-6">
           <View>
             <Text className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-1">{greeting}</Text>
-            <Text className="text-3xl font-black text-slate-900 tracking-tight">Alex's Planner</Text>
+            <Text className="text-3xl font-black text-slate-900 tracking-tight">{userName}'s Planner</Text>
           </View>
-          <TouchableOpacity className="w-14 h-14 rounded-full overflow-hidden border-2 border-primary/10 shadow-sm">
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop' }} className="w-full h-full" />
-          </TouchableOpacity>
+          <View className="flex-row items-center">
+            <TouchableOpacity onPress={() => navigation.navigate('Gatekeeper', { eventId: activeEventId })} className="w-12 h-12 rounded-full overflow-hidden border-2 border-slate-100 shadow-sm justify-center items-center bg-white mr-3">
+              <Feather name="maximize" size={20} color="#0f172a" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')} className="w-12 h-12 rounded-full overflow-hidden border-2 border-indigo-100 shadow-sm justify-center items-center bg-indigo-50">
+              <Feather name="user" size={20} color="#4f46e5" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* The "Command Center" Widget */}
-        <View className="px-6 mb-8">
-          <View className="bg-slate-900 rounded-[32px] p-6 shadow-xl shadow-slate-900/30 overflow-hidden relative">
-            {/* Ambient Lighting Background Effects */}
-            <View className="absolute -right-20 -top-20 w-64 h-64 bg-primary/30 rounded-full blur-3xl opacity-50" />
-            <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-blue-500/20 rounded-full blur-2xl opacity-50" />
-            
-            <View className="flex-row justify-between items-start mb-8">
-              <View>
-                <View className="bg-white/10 self-start px-2.5 py-1 rounded-md mb-3 border border-white/5">
-                  <Text className="text-white/80 font-bold text-[10px] uppercase tracking-widest">Next Event</Text>
+        <View className="mb-8">
+          {events.length === 0 ? (
+            <View className="px-6">
+              <View className="bg-slate-900 rounded-[32px] p-6 shadow-xl shadow-slate-900/30 overflow-hidden items-center py-10 relative">
+                <View className="absolute -right-20 -top-20 w-64 h-64 bg-primary/30 rounded-full blur-3xl opacity-50" />
+                <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-blue-500/20 rounded-full blur-2xl opacity-50" />
+                <View className="w-16 h-16 bg-white/10 rounded-full items-center justify-center mb-4 border border-white/20">
+                  <Feather name="calendar" size={28} color="white" />
                 </View>
-                <Text className="text-white text-3xl font-black leading-tight">Summer{'\n'}Wedding</Text>
-                <Text className="text-primary-light text-sm font-medium mt-2">120 Guests • Malibu, CA</Text>
-              </View>
-              <View className="items-center bg-white/10 px-4 py-3 rounded-2xl border border-white/10 shadow-inner">
-                <Text className="text-white text-2xl font-black">45</Text>
-                <Text className="text-white/60 text-[10px] uppercase font-bold tracking-wider">Days</Text>
+                <Text className="text-white text-2xl font-black mb-2 text-center tracking-tight">Zero Active Plans</Text>
+                <Text className="text-white/60 text-center font-medium px-4">Start your discovery journey below to build an unforgettable experience.</Text>
               </View>
             </View>
+          ) : (
+            <>
+              <FlatList
+                data={events}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={screenWidth}
+                decelerationRate="fast"
+                onMomentumScrollEnd={(e) => {
+                  const newIndex = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+                  if (newIndex !== activeEventIndex) setActiveEventIndex(newIndex);
+                }}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item, index }) => {
+                  const metrics = eventMetrics[item.id] || { venueName: null, venueAddress: null, vendorCount: 0, rsvps: 0, totalRsvps: 0 };
+                  const days = Math.ceil((new Date(item.date).getTime() - new Date().getTime()) / 86400000);
+                  
+                  return (
+                    <View style={{ width: screenWidth }} className="px-6">
+                      <View className="bg-slate-900 rounded-[32px] p-6 shadow-xl shadow-slate-900/30 overflow-hidden relative">
+                        <View className="absolute -right-20 -top-20 w-64 h-64 bg-primary/30 rounded-full blur-3xl opacity-50" />
+                        <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-blue-500/20 rounded-full blur-2xl opacity-50" />
+                        
+                        <View className="flex-row justify-between items-start mb-6 z-10">
+                          <View className="flex-1 mr-4">
+                            <View className="flex-row items-center mb-3">
+                              <View className="bg-white/10 px-2.5 py-1 rounded-md border border-white/5 mr-3">
+                                <Text className="text-white/80 font-bold text-[10px] uppercase tracking-widest">Active Plan</Text>
+                              </View>
+                            </View>
+                            <Text className="text-white text-3xl font-black leading-tight" numberOfLines={2}>
+                              {item.title || 'Untitled'}
+                            </Text>
+                            <Text className="text-primary-light text-sm font-medium mt-2">
+                              {metrics.venueName ? `📍 ${metrics.venueName}, ${metrics.venueAddress || item.location}` : '📍 Tap to select a venue'}
+                            </Text>
+                          </View>
 
-            {/* Animated Budget Tracker */}
-            <View className="bg-white/5 rounded-2xl p-4 border border-white/10">
-              <View className="flex-row items-end justify-between mb-3">
-                <Text className="text-white/80 text-xs font-bold uppercase tracking-wider">Budget Spent</Text>
-                <Text className="text-white font-black text-sm">$12k <Text className="text-white/40 text-xs font-medium">/ $25k</Text></Text>
-              </View>
-              {/* Progress Bar Track */}
-              <View className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                {/* Progress Bar Fill (Animated) */}
-                <Animated.View 
-                  style={{
-                    height: '100%',
-                    backgroundColor: '#34d399',
-                    borderRadius: 999,
-                    width: progressAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['0%', '100%']
-                    })
-                  }} 
-                />
-              </View>
-            </View>
-          </View>
+                          {/* Day Counter Matrix */}
+                          <View className="items-center bg-white/10 px-4 py-3 rounded-2xl border border-white/10 shadow-inner">
+                            <Text className="text-white text-2xl font-black">{days < 0 ? '0' : days}</Text>
+                            <Text className="text-white/60 text-[10px] uppercase font-bold tracking-wider">{days < 0 ? 'Done' : 'Days'}</Text>
+                          </View>
+                        </View>
+
+                        {/* Live KPI Stats */}
+                        <View className="flex-row justify-between items-center mb-4 px-1">
+                           <Text className="text-white/70 text-xs font-bold">Vendors: <Text className="text-white">{metrics.vendorCount}/8 Booked</Text></Text>
+                           <Text className="text-white/70 text-xs font-bold">RSVPs: <Text className="text-white">{metrics.rsvps}/{metrics.totalRsvps}</Text></Text>
+                        </View>
+
+                        {/* Button Hierarchy Refactor */}
+                        <TouchableOpacity 
+                          className="w-full bg-primary py-3.5 rounded-xl items-center flex-row justify-center shadow-lg shadow-primary/50 active:scale-95 transition-all mb-3"
+                          onPress={() => navigation.navigate('DiscoveryDashboard', { eventId: item.id, eventType: item.type || item.title || 'Event', budget: item.total_budget || 0 })}
+                        >
+                          <Text className="text-white font-bold text-base">Manage Event</Text>
+                        </TouchableOpacity>
+                        
+                        <View className="flex-row justify-between gap-x-3">
+                          <TouchableOpacity 
+                            className="flex-1 bg-transparent py-3 rounded-xl border border-white/20 items-center flex-row justify-center active:bg-white/10"
+                            onPress={() => navigation.navigate('GuestList', { eventId: item.id })}
+                          >
+                            <Feather name="users" size={16} color="white" />
+                            <Text className="text-white font-bold ml-2">Invite Guests</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            className="flex-1 bg-emerald-500/20 py-3 rounded-xl border border-emerald-500/30 items-center flex-row justify-center active:bg-emerald-500/30"
+                            onPress={() => navigation.navigate('Gatekeeper', { eventId: item.id })}
+                          >
+                            <Feather name="maximize" size={16} color="#34d399" />
+                            <Text className="text-emerald-400 font-bold ml-2 text-xs uppercase tracking-wide">Scanner</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                      </View>
+                    </View>
+                  );
+                }}
+              />
+              
+              {/* Paging Dots Component */}
+              {events.length > 1 && (
+                <View className="flex-row justify-center items-center mt-4 gap-x-2">
+                  {events.map((_, idx) => (
+                    <View 
+                      key={idx} 
+                      className={`h-2 rounded-full transition-all ${idx === activeEventIndex ? 'w-6 bg-primary' : 'w-2 bg-slate-300'}`} 
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </View>
 
         {/* Search Bar & Anticipation Chip */}
@@ -647,9 +802,12 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
           </View>
           
           {/* Pick up where you left off chip */}
-          <TouchableOpacity className="self-start mt-3 ml-1 flex-row items-center bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100">
+          <TouchableOpacity 
+            className="self-start mt-3 ml-1 flex-row items-center bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100"
+            onPress={() => navigation.navigate('DiscoveryDashboard', { eventId: activeEventId, eventType: events[activeEventIndex]?.type || 'Event', budget: events[activeEventIndex]?.total_budget || 0 })}
+          >
             <Feather name="clock" size={12} color="#4f46e5" />
-            <Text className="text-indigo-700 text-xs font-bold ml-1.5">Continue looking for DJs</Text>
+            <Text className="text-indigo-700 text-xs font-bold ml-1.5">Continue searching for Vendors</Text>
             <Feather name="chevron-right" size={14} color="#4f46e5" className="ml-1" />
           </TouchableOpacity>
         </View>
@@ -678,7 +836,9 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
         <View className="px-6 mb-6">
           <View className="flex-row justify-between items-center mb-5">
             <Text className="text-xl font-extrabold text-slate-900">Highest Rated</Text>
-            <TouchableOpacity><Text className="text-primary font-bold text-sm">Explore Board</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('DiscoveryDashboard', { eventId: activeEventId, eventType: events[activeEventIndex]?.type || 'Event', budget: events[activeEventIndex]?.total_budget || 0 })}>
+                <Text className="text-primary font-bold text-sm">Explore Board</Text>
+            </TouchableOpacity>
           </View>
           
           <View className="flex-row justify-between">
@@ -692,7 +852,7 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
                   // Alternate heights to create the masonry staggered effect
                   className={`bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm ${index % 2 === 0 ? 'h-64' : 'h-48'}`}
                 >
-                  <Image source={{ uri: vendor.imageUrls[0] }} className="w-full h-full absolute" resizeMode="cover" />
+                  <Image source={{ uri: vendor.image_url || 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=500' }} className="w-full h-full absolute" resizeMode="cover" />
                   <View className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                   
                   <View className="absolute top-3 left-3 bg-white/90 backdrop-blur-md px-2 py-1 rounded-lg flex-row items-center">
@@ -702,7 +862,7 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
                   
                   <View className="absolute bottom-0 w-full p-3">
                     <Text className="font-extrabold text-white text-sm mb-0.5" numberOfLines={2}>{vendor.name}</Text>
-                    <Text className="text-white/80 font-bold text-xs">{vendor.priceRange.split(' ')[0]}</Text>
+                    <Text className="text-white/80 font-bold text-xs">{vendor.price_range?.split(' ')[0] || 'Contact'}</Text>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -717,7 +877,7 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
                   onPress={() => onVendorSelect(vendor.id)} 
                   className={`bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm ${index % 2 === 0 ? 'h-48' : 'h-64'}`}
                 >
-                  <Image source={{ uri: vendor.imageUrls[0] }} className="w-full h-full absolute" resizeMode="cover" />
+                  <Image source={{ uri: vendor.image_url || 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=500' }} className="w-full h-full absolute" resizeMode="cover" />
                   <View className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                   
                   <View className="absolute top-3 left-3 bg-white/90 backdrop-blur-md px-2 py-1 rounded-lg flex-row items-center">
@@ -727,7 +887,7 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect }: any) {
                   
                   <View className="absolute bottom-0 w-full p-3">
                     <Text className="font-extrabold text-white text-sm mb-0.5" numberOfLines={2}>{vendor.name}</Text>
-                    <Text className="text-white/80 font-bold text-xs">{vendor.priceRange.split(' ')[0]}</Text>
+                    <Text className="text-white/80 font-bold text-xs">{vendor.price_range?.split(' ')[0] || 'Contact'}</Text>
                   </View>
                 </TouchableOpacity>
               ))}

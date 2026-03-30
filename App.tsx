@@ -1,193 +1,118 @@
-// import React, { useState } from 'react';
-// import { View, StyleSheet, SafeAreaView, Platform, StatusBar } from 'react-native';
-// import './global.css';
-
-// import HomeScreen from './src/screens/HomeScreen';
-// import FilterScreen from './src/screens/FilterScreen';
-// import MarketplaceScreen from './src/screens/MarketplaceScreen';
-// import VendorDetailScreen from './src/screens/VendorDetailScreen';
-
-// type ScreenName = 'HOME' | 'FILTER' | 'MARKETPLACE' | 'VENDOR_DETAIL';
-
-// export default function App() {
-//   const [currentScreen, setCurrentScreen] = useState<ScreenName>('HOME');
-//   const [selectedOccasionId, setSelectedOccasionId] = useState<string>('');
-//   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
-
-//   const [selectedLocation, setSelectedLocation] = useState<string>('');
-//   const [selectedVenueTypes, setSelectedVenueTypes] = useState<string[]>([]);
-
-//   const navigateTo = (screen: ScreenName) => {
-//     setCurrentScreen(screen);
-//   };
-
-//   const handleSelectOccasion = (id: string, location: string) => {
-//     setSelectedOccasionId(id);
-//     setSelectedLocation(location);
-//     navigateTo('FILTER');
-//   };
-
-//   const handleShowVendors = (selectedTypes: string[]) => {
-//     setSelectedVenueTypes(selectedTypes);
-//     navigateTo('MARKETPLACE');
-//   };
-
-//   const handleSelectVendor = (id: string) => {
-//     setSelectedVendorId(id);
-//     navigateTo('VENDOR_DETAIL');
-//   };
-
-//   return (
-//     <SafeAreaView style={styles.safeArea}>
-//       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-//       <View style={styles.container}>
-//         <View style={styles.mobileConstraint}>
-//           {currentScreen === 'HOME' && (
-//             <HomeScreen onSelectOccasion={handleSelectOccasion} />
-//           )}
-//           {currentScreen === 'FILTER' && (
-//             <FilterScreen
-//               occasionId={selectedOccasionId}
-//               onBack={() => navigateTo('HOME')}
-//               onShowVendors={handleShowVendors}
-//             />
-//           )}
-//           {currentScreen === 'MARKETPLACE' && (
-//             <MarketplaceScreen
-//               onBack={() => navigateTo('FILTER')}
-//               onVendorSelect={handleSelectVendor}
-//               occasionId={selectedOccasionId}
-//               location={selectedLocation}
-//               venueTypes={selectedVenueTypes}
-//             />
-//           )}
-//           {currentScreen === 'VENDOR_DETAIL' && (
-//             <VendorDetailScreen
-//               vendorId={selectedVendorId}
-//               onBack={() => navigateTo('MARKETPLACE')}
-//             />
-//           )}
-//         </View>
-//       </View>
-//     </SafeAreaView>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   safeArea: {
-//     flex: 1,
-//     backgroundColor: Platform.OS === 'web' ? '#f0f0f0' : '#ffffff',
-//   },
-//   container: {
-//     flex: 1,
-//     alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
-//     justifyContent: 'center',
-//   },
-//   mobileConstraint: {
-//     flex: 1,
-//     width: '100%',
-//     maxWidth: Platform.OS === 'web' ? 400 : '100%',
-//     backgroundColor: '#ffffff',
-//     overflow: 'hidden',
-//     // Mock mobile device styling for web
-//     ...(Platform.OS === 'web' && {
-//       maxHeight: 850,
-//       borderRadius: 40,
-//       shadowColor: '#000',
-//       shadowOffset: { width: 0, height: 10 },
-//       shadowOpacity: 0.15,
-//       shadowRadius: 30,
-//       borderWidth: 8,
-//       borderColor: '#1a1a1a',
-//       marginVertical: 20
-//     })
-//   }
-// });
-
-
-import React, { useState } from 'react';
-import { View, StyleSheet, SafeAreaView, Platform, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, SafeAreaView, Platform, StatusBar, View, ActivityIndicator } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { supabase } from './src/lib/supabase';
+import { Session } from '@supabase/supabase-js';
 import './global.css';
 
+// Auth Screens
+import LandingScreen from './src/screens/auth/LandingScreen';
+import LoginScreen from './src/screens/auth/LoginScreen';
+import SignupScreen from './src/screens/auth/SignupScreen';
+
+// Main Screens
 import HomeScreen from './src/screens/HomeScreen';
 import FilterScreen from './src/screens/FilterScreen';
-import MarketplaceScreen from './src/screens/MarketplaceScreen';
 import VendorDetailScreen from './src/screens/VendorDetailScreen';
+import GuestListScreen from './src/screens/GuestListScreen';
+import TicketScreen from './src/screens/TicketScreen';
+import GatekeeperScreen from './src/screens/GatekeeperScreen';
+import DiscoveryDashboardScreen from './src/screens/DiscoveryDashboard';
+import ProfileScreen from './src/screens/ProfileScreen';
 
-type ScreenName = 'HOME' | 'FILTER' | 'MARKETPLACE' | 'VENDOR_DETAIL';
+const Stack = createNativeStackNavigator();
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<ScreenName>('HOME');
-  const [selectedOccasionId, setSelectedOccasionId] = useState<string>('');
-  const [selectedVendorId, setSelectedVendorId] = useState<string>('');
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [selectedLocation, setSelectedLocation] = useState<string>('');
-  const [selectedVenueTypes, setSelectedVenueTypes] = useState<string[]>([]);
-  
-  // ADDED: Global state for favorited/saved vendors
+  // Global state mock for now (as was previously inside App.tsx)
   const [savedVendors, setSavedVendors] = useState<string[]>([]);
-
   const toggleSaveVendor = (id: string) => {
     setSavedVendors(prev => prev.includes(id) ? prev.filter(vId => vId !== id) : [...prev, id]);
   };
 
-  const navigateTo = (screen: ScreenName) => {
-    setCurrentScreen(screen);
-  };
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
 
-  const handleSelectOccasion = (id: string, location: string) => {
-    setSelectedOccasionId(id);
-    setSelectedLocation(location || ''); // Fallback to empty string
-    navigateTo('FILTER');
-  };
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+  }, []);
 
-  const handleShowVendors = (selectedTypes: string[]) => {
-    setSelectedVenueTypes(selectedTypes);
-    navigateTo('MARKETPLACE');
-  };
-
-  const handleSelectVendor = (id: string) => {
-    setSelectedVendorId(id);
-    navigateTo('VENDOR_DETAIL');
-  };
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#D4AF37" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <View style={styles.container}>
         <View style={styles.mobileConstraint}>
-          {currentScreen === 'HOME' && (
-            <HomeScreen 
-              onSelectOccasion={handleSelectOccasion} 
-              onVendorSelect={handleSelectVendor} // ADDED: So trending vendors work
-            />
-          )}
-          {currentScreen === 'FILTER' && (
-            <FilterScreen
-              occasionId={selectedOccasionId}
-              onBack={() => navigateTo('HOME')}
-              onShowVendors={handleShowVendors}
-            />
-          )}
-          {currentScreen === 'MARKETPLACE' && (
-            <MarketplaceScreen
-              onBack={() => navigateTo('FILTER')}
-              onVendorSelect={handleSelectVendor}
-              occasionId={selectedOccasionId}
-              location={selectedLocation}
-              venueTypes={selectedVenueTypes}
-              savedVendors={savedVendors} // ADDED
-              toggleSaveVendor={toggleSaveVendor} // ADDED
-            />
-          )}
-          {currentScreen === 'VENDOR_DETAIL' && (
-            <VendorDetailScreen
-              vendorId={selectedVendorId}
-              onBack={() => navigateTo('MARKETPLACE')}
-              isSaved={savedVendors.includes(selectedVendorId)} // ADDED
-              toggleSave={() => toggleSaveVendor(selectedVendorId)} // ADDED
-            />
-          )}
+          <NavigationContainer>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              {session && session.user ? (
+                // Main App Flow
+                <>
+                  <Stack.Screen name="Home">
+                    {(props) => (
+                      <HomeScreen 
+                        {...props} 
+                        onSelectOccasion={(id: string, location: string) => 
+                          props.navigation.navigate('Filter', { occasionId: id, location })
+                        }
+                        onVendorSelect={(id: string) => 
+                          props.navigation.navigate('VendorDetail', { vendorId: id })
+                        }
+                      />
+                    )}
+                  </Stack.Screen>
+                  <Stack.Screen name="Filter">
+                    {({ route, navigation }: any) => (
+                      <FilterScreen
+                        occasionId={route.params?.occasionId}
+                        onBack={() => navigation.goBack()}
+                        onDiscoveryReady={(eventType: string, budget: number, eventId: string) => 
+                          navigation.navigate('DiscoveryDashboard', { eventType, budget, eventId })
+                        }
+                      />
+                    )}
+                  </Stack.Screen>
+                  <Stack.Screen name="DiscoveryDashboard" component={DiscoveryDashboardScreen} />
+                  <Stack.Screen name="VendorDetail">
+                    {({ route, navigation }: any) => (
+                      <VendorDetailScreen
+                        vendorId={route.params?.vendorId}
+                        eventId={route.params?.eventId}
+                        onBack={() => navigation.goBack()}
+                        isSaved={savedVendors.includes(route.params?.vendorId)}
+                        toggleSave={() => toggleSaveVendor(route.params?.vendorId)}
+                      />
+                    )}
+                  </Stack.Screen>
+                  <Stack.Screen name="GuestList" component={GuestListScreen} />
+                  <Stack.Screen name="Ticket" component={TicketScreen} />
+                  <Stack.Screen name="Gatekeeper" component={GatekeeperScreen} />
+                  <Stack.Screen name="Profile" component={ProfileScreen} />
+                </>
+              ) : (
+                // Auth Flow
+                <>
+                  <Stack.Screen name="Landing" component={LandingScreen} />
+                  <Stack.Screen name="Login" component={LoginScreen} />
+                  <Stack.Screen name="Signup" component={SignupScreen} />
+                </>
+              )}
+            </Stack.Navigator>
+          </NavigationContainer>
         </View>
       </View>
     </SafeAreaView>
@@ -195,31 +120,12 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Platform.OS === 'web' ? '#f0f0f0' : '#ffffff',
-  },
-  container: {
-    flex: 1,
-    alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
-    justifyContent: 'center',
-  },
+  safeArea: { flex: 1, backgroundColor: Platform.OS === 'web' ? '#f0f0f0' : '#ffffff' },
+  container: { flex: 1, alignItems: Platform.OS === 'web' ? 'center' : 'stretch', justifyContent: 'center' },
   mobileConstraint: {
-    flex: 1,
-    width: '100%',
-    maxWidth: Platform.OS === 'web' ? 400 : '100%',
-    backgroundColor: '#ffffff',
-    overflow: 'hidden',
+    flex: 1, width: '100%', maxWidth: Platform.OS === 'web' ? 400 : '100%', backgroundColor: '#ffffff', overflow: 'hidden',
     ...(Platform.OS === 'web' && {
-      maxHeight: 850,
-      borderRadius: 40,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.15,
-      shadowRadius: 30,
-      borderWidth: 8,
-      borderColor: '#1a1a1a',
-      marginVertical: 20
+      maxHeight: 850, borderRadius: 40, boxShadow: '0px 10px 30px rgba(0,0,0,0.15)', borderWidth: 8, borderColor: '#1a1a1a', marginVertical: 20
     })
   }
 });
