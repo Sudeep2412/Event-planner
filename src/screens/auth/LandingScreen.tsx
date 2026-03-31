@@ -1,55 +1,80 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, Platform, StatusBar, ImageBackground, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, SafeAreaView, Platform, StatusBar, Animated, Dimensions } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+
+const { width } = Dimensions.get('window');
 
 export default function LandingScreen({ navigation }: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true })
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: false }),
+      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 40, useNativeDriver: false })
     ]).start();
   }, []);
 
   return (
-    <ImageBackground 
-      source={{ uri: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=1080&q=80' }}
-      className="flex-1"
-      resizeMode="cover"
-    >
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <View className="absolute inset-0 bg-black/60" />
+    <View className="flex-1 bg-white">
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       
+      {/* Background aesthetic blobs */}
+      <View className="absolute top-[-100px] right-[-100px] w-96 h-96 bg-slate-100 rounded-full blur-3xl opacity-50" />
+      <View className="absolute bottom-[20%] left-[-50px] w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60" />
+
       <SafeAreaView className="flex-1">
-        <View className="flex-1 items-center justify-center p-6">
-          <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }} className="items-center mb-10 w-full mt-24 flex-1">
-            <Text className="text-5xl font-extrabold text-[#D4AF37] mb-2 text-center tracking-tighter" style={{ textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: {width: 0, height: 2}, textShadowRadius: 4 }}>EventMaster</Text>
-            <View className="bg-white/20 px-4 py-1.5 rounded-full border border-white/30 backdrop-blur-md mb-4">
-              <Text className="text-white font-bold tracking-[0.2em] text-xs">ENTERPRISE EDITION</Text>
+        <View className="flex-1 px-8 justify-between pb-12 pt-24">
+          
+          {/* Header Section */}
+          <Animated.View 
+            style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }} 
+            className="flex-1 justify-center"
+          >
+            <View className="w-16 h-16 bg-slate-900 rounded-2xl items-center justify-center mb-8 shadow-xl shadow-slate-900/20">
+              <Feather name="layers" size={28} color="white" />
             </View>
-            <Text className="text-base text-gray-300 text-center mt-2 px-6 leading-6 font-medium">
-              The ultimate event organization app tailored for premium wedding and catering logistics.
+            
+            <View className="bg-slate-100 self-start px-3 py-1.5 rounded-full mb-6">
+              <Text className="text-slate-600 font-bold tracking-[0.1em] text-[10px] uppercase">Enterprise Edition</Text>
+            </View>
+            
+            <Text className="text-5xl font-black text-slate-900 tracking-tight leading-[56px] mb-4">
+              Master{'\n'}every detail.
+            </Text>
+            
+            <Text className="text-lg text-slate-500 font-medium leading-7 pr-4">
+              The premium organization platform tailored exclusively for professional event & wedding planners.
             </Text>
           </Animated.View>
 
-          <Animated.View style={{ opacity: fadeAnim }} className="w-full max-w-sm gap-y-4 mb-10">
+          {/* Action Section */}
+          <Animated.View 
+            style={{ opacity: fadeAnim }} 
+            className="w-full gap-y-4"
+          >
             <TouchableOpacity 
               onPress={() => navigation.navigate('Signup')}
-              className="w-full bg-[#D4AF37] py-4 rounded-2xl shadow-lg shadow-[#D4AF37]/30 items-center border border-yellow-400/50"
+              activeOpacity={0.8}
+              className="w-full bg-slate-900 py-4.5 rounded-2xl items-center shadow-lg shadow-slate-900/20 flex-row justify-center"
+              style={{ minHeight: 60 }}
             >
-              <Text className="text-white text-lg font-black tracking-wide">Create an Account</Text>
+              <Text className="text-white text-[17px] font-bold tracking-wide mr-2">Create an Account</Text>
+              <Feather name="arrow-right" size={18} color="white" />
             </TouchableOpacity>
 
             <TouchableOpacity 
               onPress={() => navigation.navigate('Login')}
-              className="w-full bg-black/40 border border-white/20 py-4 rounded-2xl items-center backdrop-blur-md"
+              activeOpacity={0.6}
+              className="w-full bg-white border-2 border-slate-200 py-4 rounded-2xl items-center"
+              style={{ minHeight: 60 }}
             >
-              <Text className="text-white text-lg font-bold">I already have an account</Text>
+              <Text className="text-slate-900 text-[17px] font-bold">Log In</Text>
             </TouchableOpacity>
           </Animated.View>
+          
         </View>
       </SafeAreaView>
-    </ImageBackground>
+    </View>
   );
 }

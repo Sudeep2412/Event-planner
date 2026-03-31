@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, ImageBackground, StatusBar, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, StatusBar, KeyboardAvoidingView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 
@@ -10,48 +10,63 @@ export default function LoginScreen({ navigation }: any) {
 
   async function signInWithEmail() {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
-    });
+    try {
+      const { error, data } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
 
-    if (error) {
-      Alert.alert('Login Failed', error.message);
+      if (error) {
+        Platform.OS === 'web' ? window.alert(`Login Failed: ${error.message}`) : Alert.alert('Login Failed', error.message);
+        console.error('Supabase Login Error:', error.message);
+      } else if (data?.session) {
+        console.log('Login Successful');
+      }
+    } catch (err: any) {
+      Platform.OS === 'web' ? window.alert(`Login Error: ${err.message || 'An unexpected error occurred'}`) : Alert.alert('Login Error', err.message || 'An unexpected error occurred');
+      console.error('Login Exception:', err);
+    } finally {
       setLoading(false);
     }
   }
 
   return (
-    <ImageBackground 
-      source={{ uri: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=1080&q=80' }}
-      className="flex-1"
-      resizeMode="cover"
-    >
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <View className="absolute inset-0 bg-black/60" />
+    <View className="flex-1 bg-white">
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       
+      {/* Background Decor */}
+      <View className="absolute top-[-50px] right-[-100px] w-96 h-96 bg-indigo-50 rounded-full blur-3xl opacity-60" />
+
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
       >
         <SafeAreaView className="flex-1">
-          <View className="flex-1 justify-center p-6">
-            <View className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-[32px] p-8 shadow-2xl">
-              <View className="items-center mb-8">
-                <View className="w-16 h-16 bg-white/10 rounded-full items-center justify-center mb-4 border border-white/20">
-                  <Feather name="lock" size={24} color="#D4AF37" />
-                </View>
-                <Text className="text-3xl font-extrabold text-white mb-2">Welcome Back</Text>
-                <Text className="text-gray-300 text-center">Login to continue organizing your events.</Text>
-              </View>
+          <View className="flex-1 px-8 pt-12 pb-8 justify-center">
+            
+            {/* Nav Back */}
+            <TouchableOpacity onPress={() => navigation.goBack()} className="absolute top-16 left-8 w-10 h-10 bg-slate-50 border border-slate-100 rounded-full items-center justify-center z-10">
+              <Feather name="arrow-left" size={20} color="#0f172a" />
+            </TouchableOpacity>
 
-              <View className="space-y-4 mb-8">
-                <View className="flex-row items-center bg-black/40 border border-white/10 rounded-2xl px-4 py-4 mb-4">
+            <View className="items-center mb-10 mt-10">
+              <View className="w-16 h-16 bg-indigo-50 rounded-2xl items-center justify-center mb-6">
+                <Feather name="anchor" size={28} color="#4f46e5" />
+              </View>
+              <Text className="text-3xl font-black text-slate-900 tracking-tight mb-2">Welcome Back</Text>
+              <Text className="text-slate-500 font-medium text-center px-4">
+                Access your premium event dashboard and manage your clients.
+              </Text>
+            </View>
+
+            <View className="gap-y-4 mb-8">
+              <View>
+                <Text className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Email Address</Text>
+                <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 focus:border-indigo-400 focus:bg-white transition-all">
                   <Feather name="mail" size={20} color="#94a3b8" />
                   <TextInput
-                    className="flex-1 ml-3 text-white font-medium text-base h-7"
-                    style={{ color: '#ffffff' }}
-                    placeholder="Email address"
+                    className="flex-1 ml-3 text-slate-900 font-bold text-base h-7 outline-none"
+                    placeholder="Enter your email"
                     placeholderTextColor="#94a3b8"
                     autoCapitalize="none"
                     keyboardType="email-address"
@@ -59,13 +74,15 @@ export default function LoginScreen({ navigation }: any) {
                     onChangeText={setEmail}
                   />
                 </View>
-                
-                <View className="flex-row items-center bg-black/40 border border-white/10 rounded-2xl px-4 py-4">
+              </View>
+              
+              <View>
+                <Text className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Password</Text>
+                <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 focus:border-indigo-400 focus:bg-white transition-all">
                   <Feather name="key" size={20} color="#94a3b8" />
                   <TextInput
-                    className="flex-1 ml-3 text-white font-medium text-base h-7"
-                    style={{ color: '#ffffff' }}
-                    placeholder="Password"
+                    className="flex-1 ml-3 text-slate-900 font-bold text-base h-7 outline-none"
+                    placeholder="Enter your password"
                     placeholderTextColor="#94a3b8"
                     secureTextEntry
                     autoCapitalize="none"
@@ -74,22 +91,27 @@ export default function LoginScreen({ navigation }: any) {
                   />
                 </View>
               </View>
+            </View>
 
-              <TouchableOpacity 
-                className="w-full bg-[#D4AF37] py-4 rounded-2xl shadow-lg shadow-[#D4AF37]/30 items-center flex-row justify-center border border-yellow-400/50 active:scale-95 transition-all"
-                onPress={signInWithEmail}
-                disabled={loading}
-              >
-                {loading ? <ActivityIndicator color="#fff" /> : <Text className="text-white text-lg font-black tracking-wide">Sign In</Text>}
-              </TouchableOpacity>
+            <TouchableOpacity 
+              className="w-full bg-slate-900 py-4.5 rounded-2xl items-center shadow-lg shadow-slate-900/20 active:scale-[0.98] transition-all"
+              style={{ minHeight: 60, justifyContent: 'center' }}
+              onPress={signInWithEmail}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator color="#fff" /> : <Text className="text-white text-[17px] font-bold tracking-wide">Secure Login</Text>}
+            </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => navigation.goBack()} className="mt-8 items-center py-2 flex-row justify-center">
-                 <Text className="text-gray-400 font-bold uppercase tracking-widest text-xs">Return to entry</Text>
+            <View className="flex-row justify-center mt-8">
+              <Text className="text-slate-500 font-medium">Don't have an account? </Text>
+              <TouchableOpacity onPress={() => navigation.replace('Signup')}>
+                <Text className="text-indigo-600 font-bold">Register</Text>
               </TouchableOpacity>
             </View>
+
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </ImageBackground>
+    </View>
   );
 }

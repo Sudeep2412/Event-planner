@@ -26,33 +26,58 @@ export default function GatekeeperScreen({ route, navigation }: any) {
         return;
       }
 
-      const { data: guest, error } = await supabase
-        .from('attendees')
-        .select('*')
-        .eq('qr_hash', data)
-        .eq('event_id', eventId)
-        .single();
+      if (data.startsWith('RES-')) {
+        const { data: reservation, error } = await supabase
+          .from('reservations')
+          .select('*, vendors_cache(name)')
+          .eq('qr_hash', data)
+          .eq('event_id', eventId)
+          .single();
+          
+        if (error || !reservation) {
+          Alert.alert('Invalid Booking', 'This Reservation QR code is not recognized.', [{ text: 'Scan Again', onPress: () => setScanned(false) }]);
+          return;
+        }
         
-      if (error || !guest) {
-        Alert.alert('Invalid Ticket', 'This QR code is not recognized.', [
-          { text: 'Scan Again', onPress: () => setScanned(false) }
+        if (reservation.status === 'confirmed') {
+          Alert.alert('Already Confirmed', `The booking for ${reservation.vendors_cache?.name || 'this vendor'} is already fully processed.`, [{ text: 'Scan Again', onPress: () => setScanned(false) }]);
+          return;
+        }
+        
+        const { error: updateError } = await supabase.from('reservations').update({ status: 'confirmed' }).eq('id', reservation.id);
+        if (updateError) throw updateError;
+        
+        Alert.alert('Clearance Verified', `Vendor booking confirmed for ${reservation.vendors_cache?.name || 'this vendor'}!`, [{ text: 'Scan Next', onPress: () => setScanned(false) }]);
+
+      } else {
+        const { data: guest, error } = await supabase
+          .from('attendees')
+          .select('*')
+          .eq('qr_hash', data)
+          .eq('event_id', eventId)
+          .single();
+          
+        if (error || !guest) {
+          Alert.alert('Invalid Ticket', 'This Attendee QR code is not recognized.', [
+            { text: 'Scan Again', onPress: () => setScanned(false) }
+          ]);
+          return;
+        }
+        
+        if (guest.status === 'checked_in') {
+          Alert.alert('Already Checked In', `${guest.name} has already entered.`, [
+            { text: 'Scan Again', onPress: () => setScanned(false) }
+          ]);
+          return;
+        }
+        
+        const { error: updateError } = await supabase.from('attendees').update({ status: 'checked_in' }).eq('id', guest.id);
+        if (updateError) throw updateError;
+        
+        Alert.alert('Access Granted', `Welcome to the event, ${guest.name}!`, [
+          { text: 'Scan Next', onPress: () => setScanned(false) }
         ]);
-        return;
       }
-      
-      if (guest.status === 'checked_in') {
-        Alert.alert('Already Checked In', `${guest.name} has already entered.`, [
-          { text: 'Scan Again', onPress: () => setScanned(false) }
-        ]);
-        return;
-      }
-      
-      await supabase.from('attendees').update({ status: 'checked_in' }).eq('id', guest.id);
-      
-      Alert.alert('Access Granted', `Welcome to the event, ${guest.name}!`, [
-        { text: 'Scan Next', onPress: () => setScanned(false) }
-      ]);
-      
     } catch (err: any) {
       Alert.alert('Error', err.message, [{ text: 'OK', onPress: () => setScanned(false) }]);
     }
