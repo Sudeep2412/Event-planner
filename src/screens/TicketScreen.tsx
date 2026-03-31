@@ -10,7 +10,8 @@ export default function TicketScreen({ route, navigation }: any) {
   const qrRef = useRef<any>(null);
 
   const shareTicket = async () => {
-    const textMessage = `🎫 *EventMaster VIP PASS* 🎫\n\nYou're invited to *${eventName}*!\nGuest Name: ${guestName}\nYour Ticket ID (QR): ${qrHash}\n\nPlease present this Ticket ID or the QR link natively at the venue gate for instant scanning access.`;
+    const ticketUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrHash}&margin=20`;
+    const textMessage = `🎫 *EventMaster VIP PASS* 🎫\n\nYou're invited to *${eventName}*!\nGuest Name: ${guestName}\nYour invitation QR link: ${ticketUrl}\n\nPlease present this QR link natively at the venue gate for instant scanning access.`;
     const universalUrl = `https://wa.me/?text=${encodeURIComponent(textMessage)}`;
 
     try {

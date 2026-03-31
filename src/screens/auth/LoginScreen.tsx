@@ -65,7 +65,7 @@ export default function LoginScreen({ navigation }: any) {
                 <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 focus:border-indigo-400 focus:bg-white transition-all">
                   <Feather name="mail" size={20} color="#94a3b8" />
                   <TextInput
-                    className="flex-1 ml-3 text-slate-900 font-bold text-base h-7 outline-none"
+                    className="flex-1 ml-3 text-slate-900 font-bold text-[16px] py-0 m-0 outline-none"
                     placeholder="Enter your email"
                     placeholderTextColor="#94a3b8"
                     autoCapitalize="none"
@@ -81,7 +81,7 @@ export default function LoginScreen({ navigation }: any) {
                 <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 focus:border-indigo-400 focus:bg-white transition-all">
                   <Feather name="key" size={20} color="#94a3b8" />
                   <TextInput
-                    className="flex-1 ml-3 text-slate-900 font-bold text-base h-7 outline-none"
+                    className="flex-1 ml-3 text-slate-900 font-bold text-[16px] py-0 m-0 outline-none"
                     placeholder="Enter your password"
                     placeholderTextColor="#94a3b8"
                     secureTextEntry

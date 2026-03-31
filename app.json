@@ -63,7 +63,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow EventMaster Pro to securely triangulate your position to scout the most premium relevant venues in your immediate radius."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }

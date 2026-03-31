@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '../lib/supabase';
 
 const MUHURATS = [
@@ -16,6 +17,15 @@ export default function FilterScreen({ onBack, onDiscoveryReady, occasionId }: a
   const [date, setDate] = useState('2026-12-15');
   const [budget, setBudget] = useState('500000');
   const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const getPickerDate = () => {
+    const parts = date.split('-');
+    if (parts.length === 3) {
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return new Date();
+  };
 
   const handleCreateEvent = async () => {
     const safeTitle = title.trim();
@@ -112,12 +122,43 @@ export default function FilterScreen({ onBack, onDiscoveryReady, occasionId }: a
           </View>
           
           <View className="mt-6">
-            <Text className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2.5 ml-1">Proposed Date (YYYY-MM-DD)</Text>
-            <TextInput
-              className="w-full bg-white px-5 py-4 rounded-xl border border-slate-200 text-slate-900 font-bold shadow-sm"
-              value={date}
-              onChangeText={setDate}
-            />
+            <Text className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2.5 ml-1">Proposed Date</Text>
+            {Platform.OS === 'web' ? (
+              <TextInput
+                className="w-full bg-white px-5 py-4 rounded-xl border border-slate-200 text-slate-900 font-bold shadow-sm"
+                value={date}
+                onChangeText={setDate}
+                placeholder="YYYY-MM-DD"
+              />
+            ) : (
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(true)}
+                className="w-full bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm flex-row items-center justify-between"
+              >
+                <Text className="text-slate-900 font-bold text-base">{date}</Text>
+                <Feather name="calendar" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
+
+            {showDatePicker && Platform.OS !== 'web' && (
+              <DateTimePicker
+                value={getPickerDate()}
+                mode="date"
+                display="default"
+                minimumDate={new Date()}
+                onChange={(event, selectedDate) => {
+                  setShowDatePicker(Platform.OS === 'ios');
+                  if (event.type === 'set' && selectedDate) {
+                    const year = selectedDate.getFullYear();
+                    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(selectedDate.getDate()).padStart(2, '0');
+                    setDate(`${year}-${month}-${day}`);
+                  } else if (event.type === 'dismissed') {
+                    setShowDatePicker(false);
+                  }
+                }}
+              />
+            )}
             
             {/* Muhurat Engine VIP Feature */}
             <View className="mt-6 bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
