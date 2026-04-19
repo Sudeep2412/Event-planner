@@ -10,10 +10,11 @@ const MUHURATS = [
   { date: '2026-12-15', label: 'Dec 15', tag: 'Premium', premium: true },
 ];
 
-export default function FilterScreen({ onBack, onDiscoveryReady, occasionId }: any) {
+export default function FilterScreen({ onBack, onDiscoveryReady, occasionId, initialLocation }: any) {
   const occasionTitle = occasionId ? occasionId.charAt(0).toUpperCase() + occasionId.slice(1) : 'Event';
   
   const [title, setTitle] = useState(`${occasionTitle} Celebration`);
+  const [location, setLocation] = useState(initialLocation || '');
   const [date, setDate] = useState('2026-12-15');
   const [budget, setBudget] = useState('500000');
   const [loading, setLoading] = useState(false);
@@ -29,7 +30,8 @@ export default function FilterScreen({ onBack, onDiscoveryReady, occasionId }: a
 
   const handleCreateEvent = async () => {
     const safeTitle = title.trim();
-    if (!safeTitle || !date.trim() || !budget.trim()) {
+    const safeLocation = location.trim();
+    if (!safeTitle || !safeLocation || !date.trim() || !budget.trim()) {
       return alertOrConsole("Missing Details", "Please fill out all fields to continue.");
     }
     
@@ -66,7 +68,7 @@ export default function FilterScreen({ onBack, onDiscoveryReady, occasionId }: a
         .insert({
           organizer_id: user.id,
           title: safeTitle,
-          location: 'Mumbai', 
+          location: safeLocation, 
           type: occasionTitle,
           date,
           total_budget: parsedBudget
@@ -119,6 +121,20 @@ export default function FilterScreen({ onBack, onDiscoveryReady, occasionId }: a
               value={title}
               onChangeText={setTitle}
             />
+          </View>
+
+          <View className="mt-6">
+            <Text className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2.5 ml-1">Host City / Venue Area</Text>
+            <View className="flex-row items-center bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm">
+              <Feather name="map-pin" size={18} color="#94a3b8" style={{ marginRight: 10 }} />
+              <TextInput
+                className="flex-1 text-slate-900 font-bold"
+                value={location}
+                onChangeText={setLocation}
+                placeholder="e.g. Chennai, Mumbai, or Velachery"
+                placeholderTextColor="#cbd5e1"
+              />
+            </View>
           </View>
           
           <View className="mt-6">

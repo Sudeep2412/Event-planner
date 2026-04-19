@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Animated, E
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import { useColorScheme } from 'nativewind';
 
 const occasions = [
   { id: 'wedding', name: 'Wedding', icon: 'heart', description: 'Curated venues & decor' },
@@ -12,6 +13,7 @@ const occasions = [
 ];
 
 export default function HomeScreen({ onSelectOccasion, onVendorSelect, navigation }: any) {
+  const { colorScheme } = useColorScheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [userName, setUserName] = useState('Planner');
   const [totalBudget, setTotalBudget] = useState(25000);
@@ -134,17 +136,15 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect, navigatio
   });
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-white dark:bg-slate-950 transition-colors">
       
-      {/* STICKY MINI-HEADER (Fades in on scroll) 
-        Note: For a true iOS frosted glass effect, replace this View with <BlurView intensity={80} tint="light"> from 'expo-blur'
-      */}
+      {/* STICKY MINI-HEADER (Fades in on scroll) */}
       <Animated.View 
         style={{ opacity: headerOpacity, transform: [{ translateY: headerTranslateY }] }}
-        className="absolute top-0 w-full z-50 bg-white/95 border-b border-slate-100 px-6 py-4 pt-12 flex-row justify-between items-center"
+        className="absolute top-0 w-full z-50 bg-white/95 dark:bg-slate-950/95 border-b border-slate-100 dark:border-slate-800 px-6 py-4 pt-12 flex-row justify-between items-center"
       >
-        <Text className="text-lg font-black text-slate-900">{userName}'s Planner</Text>
-        <TouchableOpacity onPress={() => supabase.auth.signOut()} className="w-8 h-8 rounded-full overflow-hidden border border-red-200 justify-center items-center bg-red-50">
+        <Text className="text-lg font-black text-slate-900 dark:text-white">{userName}'s Planner</Text>
+        <TouchableOpacity onPress={() => supabase.auth.signOut()} className="w-8 h-8 rounded-full overflow-hidden border border-red-200 dark:border-red-900/50 justify-center items-center bg-red-50 dark:bg-red-900/20">
           <Feather name="log-out" size={14} color="#ef4444" />
         </TouchableOpacity>
       </Animated.View>
@@ -159,15 +159,15 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect, navigatio
         {/* Header: Personalized Greeting */}
         <View className="px-6 flex-row justify-between items-center mb-6 pt-6">
           <View>
-            <Text className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-1">{greeting}</Text>
-            <Text className="text-3xl font-black text-slate-900 tracking-tight">{userName}'s Planner</Text>
+            <Text className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest text-xs mb-1">{greeting}</Text>
+            <Text className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{userName}'s Planner</Text>
           </View>
           <View className="flex-row items-center">
-            <TouchableOpacity onPress={() => navigation.navigate('Gatekeeper', { eventId: activeEventId })} className="w-12 h-12 rounded-full overflow-hidden border-2 border-slate-100 shadow-sm justify-center items-center bg-white mr-3">
-              <Feather name="maximize" size={20} color="#0f172a" />
+            <TouchableOpacity onPress={() => navigation.navigate('Gatekeeper', { eventId: activeEventId })} className="w-12 h-12 rounded-full overflow-hidden border-2 border-slate-100 dark:border-slate-800 shadow-sm justify-center items-center bg-white dark:bg-slate-900 mr-3">
+              <Feather name="maximize" size={20} color={colorScheme === 'dark' ? '#f8fafc' : '#0f172a'} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('Profile')} className="w-12 h-12 rounded-full overflow-hidden border-2 border-indigo-100 shadow-sm justify-center items-center bg-indigo-50">
-              <Feather name="user" size={20} color="#4f46e5" />
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')} className="w-12 h-12 rounded-full overflow-hidden border-2 border-indigo-100 dark:border-indigo-900/50 shadow-sm justify-center items-center bg-indigo-50 dark:bg-indigo-900/20">
+              <Feather name="user" size={20} color={colorScheme === 'dark' ? '#818cf8' : '#4f46e5'} />
             </TouchableOpacity>
           </View>
         </View>
@@ -176,14 +176,14 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect, navigatio
         <View className="mb-8">
           {events.length === 0 ? (
             <View className="px-6">
-              <View className="bg-white rounded-[32px] p-8 py-12 shadow-[0_8px_30px_rgba(0,0,0,0.06)] border border-slate-100 overflow-hidden items-center relative">
-                <View className="absolute -right-20 -top-20 w-64 h-64 bg-slate-50 rounded-full blur-3xl opacity-50" />
-                <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-50/50 rounded-full blur-2xl opacity-50" />
-                <View className="w-16 h-16 bg-slate-50 rounded-full items-center justify-center mb-5 border border-slate-100 shadow-sm">
-                  <Feather name="calendar" size={28} color="#0f172a" />
+              <View className="bg-white dark:bg-slate-900 rounded-[32px] p-8 py-12 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-none border border-slate-100 dark:border-slate-800 overflow-hidden items-center relative transition-colors">
+                <View className="absolute -right-20 -top-20 w-64 h-64 bg-slate-50 dark:bg-slate-800/30 rounded-full blur-3xl opacity-50" />
+                <View className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-full blur-2xl opacity-50" />
+                <View className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full items-center justify-center mb-5 border border-slate-100 dark:border-slate-700 shadow-sm">
+                  <Feather name="calendar" size={28} color={colorScheme === 'dark' ? '#cbd5e1' : '#0f172a'} />
                 </View>
-                <Text className="text-slate-900 text-2xl font-black mb-2 text-center tracking-tight">Zero Active Plans</Text>
-                <Text className="text-slate-500 text-center font-medium px-4 leading-relaxed">Let's craft an unparalleled experience. Tap an occasion below to build your itinerary.</Text>
+                <Text className="text-slate-900 dark:text-white text-2xl font-black mb-2 text-center tracking-tight">Zero Active Plans</Text>
+                <Text className="text-slate-500 dark:text-slate-400 text-center font-medium px-4 leading-relaxed">Let's craft an unparalleled experience. Tap an occasion below to build your itinerary.</Text>
               </View>
             </View>
           ) : (
@@ -206,60 +206,94 @@ export default function HomeScreen({ onSelectOccasion, onVendorSelect, navigatio
                   
                   return (
                     <View style={{ width: screenWidth }} className="px-6">
-                      <View className="bg-white rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.06)] border border-slate-100 overflow-hidden relative">
-                        <View className="absolute -right-20 -top-20 w-64 h-64 bg-slate-50 rounded-full blur-3xl opacity-50" />
+                      <View className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-none border border-slate-100 dark:border-slate-800 overflow-hidden relative transition-colors">
+                        <View className="absolute -right-20 -top-20 w-64 h-64 bg-slate-50 dark:bg-slate-800/30 rounded-full blur-3xl opacity-50" />
                         
                         <View className="flex-row justify-between items-start mb-6 z-10">
                           <View className="flex-1 mr-4">
                             <View className="flex-row items-center mb-3">
-                              <View className="bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 mr-3">
-                                <Text className="text-slate-500 font-bold text-[10px] uppercase tracking-widest">Active Plan</Text>
+                              <View className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 mr-3">
+                                <Text className="text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-widest">Active Plan</Text>
                               </View>
                             </View>
-                            <Text className="text-slate-900 text-3xl font-black leading-tight" numberOfLines={2}>
+                            <Text className="text-slate-900 dark:text-white text-3xl font-black leading-tight" numberOfLines={2}>
                               {item.title || 'Untitled'}
                             </Text>
-                            <Text className="text-indigo-600 text-sm font-bold mt-2">
+                            <Text className="text-indigo-600 dark:text-indigo-400 text-sm font-bold mt-2">
                               {metrics.venueName ? `📍 ${metrics.venueName}, ${metrics.venueAddress || item.location}` : '📍 Tap to select a venue'}
                             </Text>
                           </View>
 
                           {/* Day Counter Matrix */}
-                          <View className="items-center bg-slate-900 px-4 py-3 rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
+                          <View className="items-center bg-slate-900 dark:bg-indigo-600 px-4 py-3 rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
                             <Text className="text-white text-2xl font-black">{days < 0 ? '0' : days}</Text>
                             <Text className="text-white/60 text-[10px] uppercase font-bold tracking-wider">{days < 0 ? 'Done' : 'Days'}</Text>
                           </View>
                         </View>
 
                         {/* Live KPI Stats */}
-                        <View className="flex-row justify-between items-center mb-5 px-1 pb-4 border-b border-slate-100">
-                           <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider">Vendors: <Text className="text-slate-900">{metrics.vendorCount}/8 Booked</Text></Text>
-                           <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider">RSVPs: <Text className="text-indigo-600">{metrics.rsvps}/{metrics.totalRsvps}</Text></Text>
+                        <View className="flex-row justify-between items-center mb-5 px-1 pb-4 border-b border-slate-100 dark:border-slate-800 transition-colors">
+                           <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">Vendors: <Text className="text-slate-900 dark:text-white">{metrics.vendorCount}/8 Booked</Text></Text>
+                           <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">RSVPs: <Text className="text-indigo-600 dark:text-indigo-400">{metrics.rsvps}/{metrics.totalRsvps}</Text></Text>
                         </View>
 
                         {/* Button Hierarchy Refactor */}
                         <TouchableOpacity 
                           className="w-full bg-[#1A1A1A] py-4 rounded-xl items-center flex-row justify-center shadow-lg active:scale-95 transition-all mb-3"
-                          onPress={() => navigation.navigate('DiscoveryDashboard', { eventId: item.id, eventType: item.type || item.title || 'Event', budget: item.total_budget || 0 })}
+                          onPress={() => navigation.navigate('SubEventBuilder', { eventId: item.id, eventType: item.type || item.title || 'Wedding', eventDate: item.date })}
                         >
-                          <Text className="text-white font-extrabold text-base">Manage Event</Text>
+                          <Feather name="layers" size={18} color="white" />
+                          <Text className="text-white font-extrabold text-base ml-2">Configure Functions</Text>
                         </TouchableOpacity>
                         
-                        <View className="flex-row justify-between gap-x-3">
+                        <View className="flex-row justify-between gap-x-3 mb-3">
                           <TouchableOpacity 
-                            className="flex-1 bg-white py-3.5 rounded-xl border border-slate-200 shadow-sm items-center flex-row justify-center active:bg-slate-50"
-                            onPress={() => navigation.navigate('GuestList', { eventId: item.id })}
+                            className="flex-1 bg-white dark:bg-slate-800 py-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm items-center flex-row justify-center active:bg-slate-50 transition-colors"
+                            onPress={() => navigation.navigate('DiscoveryDashboard', { eventId: item.id, eventType: item.type || item.title || 'Event', budget: item.total_budget || 0 })}
                           >
-                            <Feather name="users" size={16} color="#0f172a" />
-                            <Text className="text-slate-900 font-bold ml-2">Invite</Text>
+                            <Feather name="search" size={16} color={colorScheme === 'dark' ? '#f8fafc' : '#0f172a'} />
+                            <Text className="text-slate-900 dark:text-white font-bold ml-2 text-xs">Vendors</Text>
                           </TouchableOpacity>
                           <TouchableOpacity 
-                            className="flex-1 bg-emerald-50 py-3.5 rounded-xl border border-emerald-100 shadow-sm items-center flex-row justify-center active:bg-emerald-100"
+                            className="flex-1 bg-emerald-50 dark:bg-emerald-900/30 py-3.5 rounded-xl border border-emerald-100 dark:border-emerald-800 shadow-sm items-center flex-row justify-center active:bg-emerald-100 transition-colors"
+                            onPress={() => navigation.navigate('FoodAnalytics', { eventId: item.id })}
+                          >
+                            <Text className="mr-1">🌿</Text>
+                            <Text className="text-emerald-700 dark:text-emerald-400 font-bold ml-1 text-xs uppercase tracking-wide">Food</Text>
+                          </TouchableOpacity>
+                        </View>
+                        
+                        <View className="flex-row justify-between gap-x-3 mb-3">
+                          <TouchableOpacity 
+                            className="flex-1 bg-indigo-50 dark:bg-indigo-900/30 py-3.5 rounded-xl border border-indigo-100 dark:border-indigo-800 shadow-sm items-center flex-row justify-center active:bg-indigo-100 transition-colors"
+                            onPress={() => navigation.navigate('Budget', { eventId: item.id, totalBudget: item.total_budget || 25000 })}
+                          >
+                            <Feather name="dollar-sign" size={16} color={colorScheme === 'dark' ? '#818cf8' : '#4f46e5'} />
+                            <Text className="text-indigo-700 dark:text-indigo-400 font-bold ml-1 text-xs uppercase tracking-wide">Budget</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            className="flex-1 bg-amber-50 dark:bg-amber-900/30 py-3.5 rounded-xl border border-amber-100 dark:border-amber-800 shadow-sm items-center flex-row justify-center active:bg-amber-100 transition-colors"
                             onPress={() => navigation.navigate('Gatekeeper', { eventId: item.id })}
                           >
-                            <Feather name="maximize" size={16} color="#059669" />
-                            <Text className="text-emerald-700 font-bold ml-2 text-xs uppercase tracking-wide">Scanner</Text>
+                            <Feather name="maximize" size={16} color={colorScheme === 'dark' ? '#fbbf24' : '#d97706'} />
+                            <Text className="text-amber-700 dark:text-amber-400 font-bold ml-2 text-xs uppercase tracking-wide">Scanner</Text>
                           </TouchableOpacity>
+                        </View>
+
+                        <View className="flex-row justify-between gap-x-3">
+                           <TouchableOpacity 
+                             className="flex-[0.5] bg-sky-50 dark:bg-sky-900/30 py-3.5 rounded-xl border border-sky-100 dark:border-sky-800 shadow-sm items-center flex-row justify-center active:bg-sky-100 transition-colors"
+                             onPress={() => navigation.navigate('GuestList', { eventId: item.id })}
+                           >
+                             <Feather name="users" size={16} color={colorScheme === 'dark' ? '#38bdf8' : '#0284c7'} />
+                           </TouchableOpacity>
+                           <TouchableOpacity 
+                             className="flex-[1.5] bg-slate-900 dark:bg-slate-800 py-3.5 rounded-xl border border-slate-800 shadow-sm items-center flex-row justify-center active:bg-slate-800 transition-colors"
+                             onPress={() => navigation.navigate('TimelineBuilder', { eventId: item.id })}
+                           >
+                             <Feather name="clock" size={16} color="white" />
+                             <Text className="text-white font-bold ml-2 text-xs uppercase tracking-wide">Itinerary Builder</Text>
+                           </TouchableOpacity>
                         </View>
                       </View>
                     </View>

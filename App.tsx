@@ -20,8 +20,24 @@ import TicketScreen from './src/screens/TicketScreen';
 import GatekeeperScreen from './src/screens/GatekeeperScreen';
 import DiscoveryDashboardScreen from './src/screens/DiscoveryDashboard';
 import ProfileScreen from './src/screens/ProfileScreen';
+import SubEventBuilderScreen from './src/screens/SubEventBuilderScreen';
+import RSVPFormScreen from './src/screens/RSVPFormScreen';
+import RSVPConfirmationScreen from './src/screens/RSVPConfirmationScreen';
+import FoodAnalyticsScreen from './src/screens/FoodAnalyticsScreen';
+import BudgetScreen from './src/screens/BudgetScreen';
+import TimelineBuilderScreen from './src/screens/TimelineBuilderScreen';
 
 const Stack = createNativeStackNavigator();
+
+const linking = {
+  prefixes: ['http://localhost:8081', 'https://eventmasterpro.com', 'exp://'],
+  config: {
+    screens: {
+      RSVPForm: 'rsvp/:eventId',
+      RSVPConfirmation: 'rsvp-confirm/:qrHash'
+    }
+  }
+};
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -57,7 +73,7 @@ export default function App() {
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <View style={styles.container}>
         <View style={styles.mobileConstraint}>
-          <NavigationContainer>
+          <NavigationContainer linking={linking}>
             <Stack.Navigator screenOptions={{ headerShown: false }}>
               {session && session.user ? (
                 // Main App Flow
@@ -79,6 +95,7 @@ export default function App() {
                     {({ route, navigation }: any) => (
                       <FilterScreen
                         occasionId={route.params?.occasionId}
+                        initialLocation={route.params?.location}
                         onBack={() => navigation.goBack()}
                         onDiscoveryReady={(eventType: string, budget: number, eventId: string) => 
                           navigation.navigate('DiscoveryDashboard', { eventType, budget, eventId })
@@ -102,6 +119,12 @@ export default function App() {
                   <Stack.Screen name="Ticket" component={TicketScreen} />
                   <Stack.Screen name="Gatekeeper" component={GatekeeperScreen} />
                   <Stack.Screen name="Profile" component={ProfileScreen} />
+                  
+                  {/* Event Flow Integrations */}
+                  <Stack.Screen name="SubEventBuilder" component={SubEventBuilderScreen} />
+                  <Stack.Screen name="FoodAnalytics" component={FoodAnalyticsScreen} />
+                  <Stack.Screen name="Budget" component={BudgetScreen} />
+                  <Stack.Screen name="TimelineBuilder" component={TimelineBuilderScreen} />
                 </>
               ) : (
                 // Auth Flow
@@ -111,6 +134,9 @@ export default function App() {
                   <Stack.Screen name="Signup" component={SignupScreen} />
                 </>
               )}
+              {/* Public/Guest Accessible Routes bypassing Auth */}
+              <Stack.Screen name="RSVPForm" component={RSVPFormScreen} />
+              <Stack.Screen name="RSVPConfirmation" component={RSVPConfirmationScreen} />
             </Stack.Navigator>
           </NavigationContainer>
         </View>

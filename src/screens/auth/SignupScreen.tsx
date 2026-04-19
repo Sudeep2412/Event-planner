@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, StatusBar, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator, StatusBar, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 
@@ -8,10 +8,16 @@ export default function SignupScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Refs for auto-focus
+  const emailRef = useRef<TextInput>(null);
+  const passRef = useRef<TextInput>(null);
 
   async function signUpWithEmail() {
+    setErrorMsg('');
     if (!businessName || !email || !password) {
-      Platform.OS === 'web' ? window.alert('Please fill out all fields.') : Alert.alert('Error', 'Please fill out all fields.');
+      setErrorMsg('Please fill out all fields.');
       return;
     }
 
@@ -23,33 +29,49 @@ export default function SignupScreen({ navigation }: any) {
       });
 
       if (error) {
-        Platform.OS === 'web' ? window.alert(`Signup Failed: ${error.message}`) : Alert.alert('Signup Failed', error.message);
-        console.error('Supabase Signup Error:', error.message);
+        if (error.message.includes('rate limit')) {
+           setErrorMsg('Supabase Security: Rate limit exceeded. Please try again in 60s or use Dev Bypass.');
+        } else {
+           setErrorMsg(error.message);
+        }
       } else if (data?.user) {
-        
         // Setup planner profile
         const { error: profileError } = await supabase.from('profiles').upsert({ 
           id: data.user.id, 
           role: 'planner',
-          business_name: businessName
+          full_name: businessName
         });
         
         if (profileError) {
-          console.error('Profile Creation Error:', profileError.message);
+          setErrorMsg('Profile creation warning: ' + profileError.message);
         }
         
         if (data?.session) {
           console.log('Signup Successful');
         } else {
-          Platform.OS === 'web' 
-            ? window.alert('Registration successful! Please check your inbox for email verification.') 
-            : Alert.alert('Success', 'Please check your inbox for email verification!');
-          navigation.goBack();
+          setErrorMsg('Registration successful! Please check your inbox for email verification.');
+          setTimeout(() => navigation.goBack(), 3000);
         }
       }
     } catch (err: any) {
-      Platform.OS === 'web' ? window.alert(`Signup Error: ${err.message || 'An unexpected error occurred'}`) : Alert.alert('Signup Error', err.message || 'An unexpected error occurred');
-      console.error('Signup Exception:', err);
+      setErrorMsg(err.message || 'An unexpected runtime error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Developer Bypass
+  async function devBypassAuth() {
+    setErrorMsg('');
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: 'demo@eventmaster.com',
+        password: 'password123',
+      });
+      if (error) setErrorMsg('Dev Login failed: ' + error.message);
+    } catch (err: any) {
+       setErrorMsg(err.message);
     } finally {
       setLoading(false);
     }
@@ -67,7 +89,7 @@ export default function SignupScreen({ navigation }: any) {
         className="flex-1"
       >
         <SafeAreaView className="flex-1">
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
             <View className="flex-1 px-8 pt-12 justify-center">
               
               {/* Nav Back */}
@@ -75,16 +97,16 @@ export default function SignupScreen({ navigation }: any) {
                 <Feather name="arrow-left" size={20} color="#0f172a" />
               </TouchableOpacity>
 
-              <View className="mb-10 mt-4">
+              <View className="mb-8 mt-4">
                 <Text className="text-3xl font-black text-slate-900 tracking-tight mb-2">Create Account</Text>
                 <Text className="text-slate-500 font-medium">
                   Register as an enterprise planner to start managing elite events today.
                 </Text>
               </View>
 
-              <View className="gap-y-4 mb-8">
+              <View className="gap-y-4 mb-6">
                 <View>
-                  <Text className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Business or Full Name</Text>
+                  <Text className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Business Name</Text>
                   <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 focus:border-amber-400 focus:bg-white transition-all">
                     <Feather name="briefcase" size={20} color="#94a3b8" />
                     <TextInput
@@ -93,6 +115,9 @@ export default function SignupScreen({ navigation }: any) {
                       placeholderTextColor="#94a3b8"
                       value={businessName}
                       onChangeText={setBusinessName}
+                      blurOnSubmit={false}
+                      returnKeyType="next"
+                      onSubmitEditing={() => emailRef.current?.focus()}
                     />
                   </View>
                 </View>
@@ -102,6 +127,7 @@ export default function SignupScreen({ navigation }: any) {
                   <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 focus:border-amber-400 focus:bg-white transition-all">
                     <Feather name="mail" size={20} color="#94a3b8" />
                     <TextInput
+                      ref={emailRef}
                       className="flex-1 ml-3 text-slate-900 font-bold text-[16px] py-0 m-0 outline-none"
                       placeholder="Enter your email"
                       placeholderTextColor="#94a3b8"
@@ -109,6 +135,9 @@ export default function SignupScreen({ navigation }: any) {
                       keyboardType="email-address"
                       value={email}
                       onChangeText={setEmail}
+                      blurOnSubmit={false}
+                      returnKeyType="next"
+                      onSubmitEditing={() => passRef.current?.focus()}
                     />
                   </View>
                 </View>
@@ -118,25 +147,43 @@ export default function SignupScreen({ navigation }: any) {
                   <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 focus:border-amber-400 focus:bg-white transition-all">
                     <Feather name="key" size={20} color="#94a3b8" />
                     <TextInput
+                      ref={passRef}
                       className="flex-1 ml-3 text-slate-900 font-bold text-[16px] py-0 m-0 outline-none"
                       placeholder="Create a password"
                       placeholderTextColor="#94a3b8"
                       secureTextEntry
                       autoCapitalize="none"
+                      returnKeyType="done"
                       value={password}
                       onChangeText={setPassword}
+                      onSubmitEditing={signUpWithEmail}
                     />
                   </View>
                 </View>
               </View>
 
+              {/* Inline Error State */}
+              {errorMsg ? (
+                <View className="bg-red-50 border border-red-100 p-4 rounded-xl mb-6">
+                  <Text className="text-red-600 font-bold text-sm tracking-wide">{errorMsg}</Text>
+                </View>
+              ) : null}
+
               <TouchableOpacity 
-                className="w-full bg-slate-900 py-4.5 rounded-2xl items-center shadow-lg shadow-slate-900/20 active:scale-[0.98] transition-all"
+                className="w-full bg-slate-900 py-4 rounded-2xl items-center shadow-lg shadow-slate-900/20 active:scale-[0.98] transition-all mb-4"
                 style={{ minHeight: 60, justifyContent: 'center' }}
                 onPress={signUpWithEmail}
                 disabled={loading}
               >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text className="text-white text-[17px] font-bold tracking-wide">Complete Registration</Text>}
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                className="w-full bg-slate-100 border border-slate-200 py-4 rounded-2xl items-center active:scale-[0.98] transition-all"
+                onPress={devBypassAuth}
+                disabled={loading}
+              >
+                <Text className="text-slate-500 font-bold tracking-widest uppercase text-xs">🛠️ Developer Mock Bypass</Text>
               </TouchableOpacity>
 
               <View className="flex-row justify-center mt-8">

@@ -35,29 +35,158 @@ export default function DiscoveryDashboard({ route, navigation }: any) {
     return () => clearInterval(interval);
   }, [loading]);
 
-  const fetchScrapedData = async () => {
+  const [fallbackMode, setFallbackMode] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [radius, setRadius] = useState(20);
+
+  const fetchScrapedData = async (overrideRadius?: number) => {
     setLoading(true);
+    setFallbackMode(false);
     try {
-      let lat = 19.0760;
-      let lng = 72.8777; 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        lat = loc.coords.latitude;
-        lng = loc.coords.longitude;
-      } else {
-        Alert.alert("Location Services Disabled", "Using default central coordinates (Mumbai) to find vendors. Please enable GPS for hyper-local results.");
+      // 1. Fetch Event Location
+      let eventLocation = 'Mumbai';
+      if (eventId) {
+        const { data: eventData } = await supabase.from('events').select('location').eq('id', eventId).single();
+        if (eventData && eventData.location) {
+          eventLocation = eventData.location;
+        }
       }
 
-      const { data, error } = await supabase.functions.invoke('vendor-scraper', {
-        body: { latitude: lat, longitude: lng, eventType }
-      });
+      let lat = 19.0760;
+      let lng = 72.8777; 
+      let radiusMeters = (overrideRadius || radius) * 1000;
 
-      if (error) throw error;
-      setVendors(data?.vendors || []);
-      if (data?.categories) setCategories(data.categories);
-    } catch (err: any) {
-      Alert.alert("Discovery Error", "Could not scrape vendors near you.");
+      if (typeof overrideRadius !== 'number') {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase.from('profiles').select('search_radius_km').eq('id', user.id).single();
+            if (profile && profile.search_radius_km) {
+               radiusMeters = profile.search_radius_km * 1000;
+               setRadius(profile.search_radius_km);
+            }
+          }
+        } catch (e) {
+          console.warn("Could not fetch user radius preference.");
+        }
+      }
+
+      console.log(`Live Scraping: Resolving coordinates for ${eventLocation}...`);
+      try {
+        const geocode = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(eventLocation)}&format=json&limit=1`, {
+          headers: { 'User-Agent': 'EventMasterPro/1.0' }
+        });
+        const geocodeData = await geocode.json();
+        if (geocodeData && geocodeData.length > 0) {
+          lat = parseFloat(geocodeData[0].lat);
+          lng = parseFloat(geocodeData[0].lon);
+        }
+      } catch (geoErr) {
+        console.warn("Geocoding failed, using default coords.");
+      }
+
+      // 3. Live Overpass API Scraping (Dynamic Radius)
+      try {
+        console.log(`Live Scraping: Fetching OpenStreetMap nodes around [${lat}, ${lng}] within ${radiusMeters/1000}km...`);
+        const overpassQuery = `
+        [out:json][timeout:45];
+        (
+          node(around:${radiusMeters}, ${lat}, ${lng})["amenity"="restaurant"];
+          node(around:${radiusMeters}, ${lat}, ${lng})["leisure"="park"];
+          node(around:${radiusMeters}, ${lat}, ${lng})["building"="commercial"];
+        );
+        out 20;
+      `;
+      
+      const overpassRes = await fetch(`https://overpass-api.de/api/interpreter`, {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(overpassQuery),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
+      
+      if (!overpassRes.ok) throw new Error(`Overpass API Error: ${overpassRes.status}`);
+      const overpassData = await overpassRes.json();
+      
+      const types = ['Venues', 'Caterers', 'Photographers', 'Decorators', 'DJs', 'Makeup Artists'];
+      const images = [
+        'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=500',
+        'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=500',
+        'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=500',
+        'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=500'
+      ];
+
+      // 4. Map Raw OSM Data to EventMaster schema with Real Photo Support
+      const liveVendors = overpassData.elements
+        .filter((el: any) => el.tags && el.tags.name) // only nodes with names
+        .map((el: any, index: number) => {
+          let mappedType = el.tags.amenity === 'restaurant' ? 'Caterers' : (el.tags.leisure || el.tags.tourism) ? 'Venues' : types[index % types.length];
+          
+          let realPhotoUrl = null;
+          if (el.tags.image) {
+            realPhotoUrl = el.tags.image;
+          } else if (el.tags.wikimedia_commons && el.tags.wikimedia_commons.startsWith('File:')) {
+            realPhotoUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(el.tags.wikimedia_commons.replace('File:', ''))}?width=500`;
+          }
+
+          return {
+            id: `osm-${el.id}`,
+            name: el.tags.name,
+            category: mappedType,
+            type: mappedType,
+            price_range: ['Price: $$', 'Price: $$$', 'Price: $$$$'][Math.floor(Math.random()*3)],
+            rating: Number((4 + Math.random()).toFixed(1)),
+            address: el.tags['addr:street'] ? `${el.tags['addr:street']}, ${eventLocation}` : `${eventLocation} Metropolitan Area`,
+            phone: el.tags.phone || el.tags['contact:phone'] || 'Contact unavailable',
+            website: el.tags.website || el.tags['contact:website'] || null,
+            opening_hours: el.tags.opening_hours || 'Varies by event',
+            capacity: el.tags.capacity || null,
+            diet_veg: el.tags['diet:vegetarian'] === 'yes' || el.tags['diet:vegan'] === 'yes',
+            diet_halal: el.tags['diet:halal'] === 'yes',
+            wheelchair: el.tags.wheelchair === 'yes',
+            outdoor: el.tags.outdoor_seating === 'yes',
+            wifi: el.tags.internet_access === 'wlan' || el.tags.wifi === 'yes' || el.tags.internet_access === 'yes',
+            image_url: realPhotoUrl || images[index % images.length],
+          };
+        });
+
+      if (liveVendors.length > 0) {
+        setVendors(liveVendors);
+        setIsLive(true);
+        const uniqueTypes = ['All', ...new Set(liveVendors.map((v: any) => v.type).filter(Boolean))];
+        setCategories(uniqueTypes as string[]);
+        
+        // 5. Silently auto-cache for offline mode
+        supabase.from('vendors_cache').upsert(liveVendors.map((v: any) => ({
+          ...v, price: 0
+        }))).then(({ error }) => {
+          if (error) console.log("Silent cache error:", error.message);
+        });
+        
+      } else {
+        throw new Error("No live vendors found in that exact radius.");
+      }
+    } catch (scraperErr: any) {
+      // Fallback to cached vendors from Supabase table
+      console.log('Live scraper unavailable, falling back to cache:', scraperErr.message);
+      setIsLive(false);
+      setFallbackMode(true);
+      const { data: cachedVendors, error: cacheError } = await supabase
+        .from('vendors_cache')
+        .select('*')
+        .limit(20);
+      
+      if (cacheError) throw cacheError;
+      
+      if (cachedVendors && cachedVendors.length > 0) {
+        setVendors(cachedVendors);
+        const uniqueTypes = ['All', ...new Set(cachedVendors.map((v: any) => v.type).filter(Boolean))];
+        setCategories(uniqueTypes as string[]);
+      } else {
+        setVendors([]);
+      }
+    }
+  } catch (err: any) {
+    Alert.alert("Discovery Error", "Could not load vendors. Please check your connection.");
     } finally {
       setLoading(false);
     }
@@ -112,22 +241,54 @@ export default function DiscoveryDashboard({ route, navigation }: any) {
 
   const displayedVendors = activeCategory === 'All' ? vendors : vendors.filter(v => v.type === activeCategory);
 
+  const updateRadiusLive = async (delta: number) => {
+    const newRadius = Math.max(2, Math.min(50, radius + delta));
+    if (newRadius === radius) return;
+    setRadius(newRadius);
+    supabase.auth.getUser().then(({ data: { user }}) => {
+      if (user) supabase.from('profiles').update({ search_radius_km: newRadius }).eq('id', user.id);
+    });
+  };
+
   return (
     <View className="flex-1 bg-slate-50 pt-12">
       <View className="px-5 py-4 flex-row items-center justify-between bg-white shadow-sm z-10 border-b border-slate-100">
         <TouchableOpacity onPress={() => navigation.goBack()} className="p-2 bg-slate-50 rounded-full border border-slate-100">
           <Feather name="arrow-left" size={20} color="#0f172a" />
         </TouchableOpacity>
-        <View className="items-center">
-          <Text className="text-lg font-black text-slate-900 capitalize tracking-tight">{eventType} Directory</Text>
+        <View className="flex-1 items-center px-4">
+          <Text className="text-lg font-black text-slate-900 capitalize tracking-tight" numberOfLines={1}>{eventType} Directory</Text>
           <Text className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">Budget: ₹{budget.toLocaleString('en-IN')}</Text>
         </View>
-        <TouchableOpacity onPress={fetchScrapedData} className="p-2 bg-slate-50 rounded-full border border-slate-100">
+        <TouchableOpacity onPress={() => fetchScrapedData()} className="p-2 bg-slate-50 rounded-full border border-slate-100">
           <Feather name="refresh-cw" size={20} color="#0f172a" />
         </TouchableOpacity>
       </View>
 
       <View className="bg-white border-b border-slate-100 z-10 py-3">
+        {/* Live Status & Radius Controller */}
+        <View className="px-5 mb-3 flex-row items-center justify-between">
+          <View className={`px-3 py-1.5 rounded-full flex-row items-center border ${isLive ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+            <View className={`w-2 h-2 rounded-full mr-2 ${isLive ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            <Text className={`text-[10px] font-black tracking-wide uppercase ${isLive ? 'text-emerald-700' : 'text-amber-700'}`}>
+              {isLive ? 'LIVE' : 'CACHE'}
+            </Text>
+          </View>
+
+          {/* Interactive Live Radius Scaler */}
+          <View className="flex-row items-center bg-slate-50 rounded-full border border-slate-200 overflow-hidden">
+            <TouchableOpacity onPress={() => updateRadiusLive(-2)} className="px-3 py-1.5 border-r border-slate-200 active:bg-slate-200">
+              <Feather name="minus" size={14} color="#0f172a" />
+            </TouchableOpacity>
+            <View className="px-3">
+               <Text className="text-xs font-black text-slate-900">{radius} km</Text>
+            </View>
+            <TouchableOpacity onPress={() => updateRadiusLive(2)} className="px-3 py-1.5 border-l border-slate-200 active:bg-slate-200">
+              <Feather name="plus" size={14} color="#0f172a" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
           {categories.map(cat => (
             <TouchableOpacity 
@@ -142,6 +303,12 @@ export default function DiscoveryDashboard({ route, navigation }: any) {
       </View>
 
       <ScrollView className="flex-1 px-5 pt-5 pb-20" showsVerticalScrollIndicator={false}>
+        {fallbackMode && (
+          <View className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 flex-row items-center">
+            <Feather name="info" size={14} color="#d97706" />
+            <Text className="text-amber-700 text-xs font-bold ml-2">Showing cached results — live search unavailable</Text>
+          </View>
+        )}
         {loading ? (
           <View className="items-center justify-center pt-32">
             <ActivityIndicator size="large" color="#1A1A1A" />
@@ -167,8 +334,46 @@ export default function DiscoveryDashboard({ route, navigation }: any) {
               </View>
 
               <View className="p-6">
-                <Text className="text-xl font-black text-slate-900 mb-1 leading-tight">{vendor.name}</Text>
-                <Text className="text-slate-500 font-bold text-sm mb-4">{vendor.price_range}</Text>
+                <Text className="text-xl font-black text-slate-900 mb-2 leading-tight">{vendor.name}</Text>
+                
+                {/* Meta Badges */}
+                { (vendor.diet_veg || vendor.diet_halal || vendor.capacity) && (
+                  <View className="flex-row gap-2 mb-3">
+                    {vendor.diet_veg && <View className="bg-emerald-50 px-2 py-1 rounded flex-row items-center border border-emerald-200"><Text className="text-emerald-700 text-[10px] font-bold uppercase tracking-widest">🥬 Pure Veg</Text></View>}
+                    {vendor.diet_halal && <View className="bg-amber-50 px-2 py-1 rounded flex-row items-center border border-amber-200"><Text className="text-amber-700 text-[10px] font-bold uppercase tracking-widest">🕌 Halal</Text></View>}
+                    {vendor.capacity && <View className="bg-slate-100 px-2 py-1 rounded flex-row items-center border border-slate-200"><Text className="text-slate-600 text-[10px] font-bold uppercase tracking-widest">👥 Max: {vendor.capacity}</Text></View>}
+                  </View>
+                )}
+
+                <View className="flex-row items-center mb-1.5">
+                  <Feather name="map-pin" size={12} color="#64748b" />
+                  <Text className="text-slate-500 font-bold text-xs ml-1.5 leading-tight flex-1" numberOfLines={2}>{vendor.address}</Text>
+                </View>
+
+                {vendor.phone !== 'Contact unavailable' && (
+                  <View className="flex-row items-center mb-1.5">
+                    <Feather name="phone" size={12} color="#64748b" />
+                    <Text className="text-slate-500 font-bold text-xs ml-1.5">{vendor.phone}</Text>
+                  </View>
+                )}
+                
+                {vendor.opening_hours !== 'Varies by event' && (
+                  <View className="flex-row items-center mb-3">
+                    <Feather name="clock" size={12} color="#64748b" />
+                    <Text className="text-slate-500 font-bold text-xs ml-1.5">{vendor.opening_hours}</Text>
+                  </View>
+                )}
+                
+                {/* Amenities Block */}
+                {(vendor.wheelchair || vendor.outdoor || vendor.wifi) && (
+                  <View className="flex-row items-center gap-x-2.5 mb-3 border-t border-slate-50 pt-3">
+                    {vendor.wheelchair && <Text className="text-sm">♿</Text>}
+                    {vendor.outdoor && <Text className="text-sm">🌳</Text>}
+                    {vendor.wifi && <Text className="text-sm">📶</Text>}
+                  </View>
+                )}
+
+                <Text className="text-slate-900 font-black text-xs mb-4 mt-1">{vendor.price_range}  ·  Starting Budget</Text>
                 
                 { vendor.tags && vendor.tags.length > 0 && (
                   <View className="flex-row flex-wrap gap-2 mb-5">
